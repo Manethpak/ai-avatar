@@ -1,124 +1,166 @@
-import Image from 'next/image'
-import { Inter } from 'next/font/google'
+import React, { useEffect, useState } from "react";
+import Head from "next/head";
+import Image from "next/image";
 
-const inter = Inter({ subsets: ['latin'] })
+const Home = () => {
+  const maxRetries = 20;
 
-export default function Home() {
+  const [prompt, setPrompt] = useState<string>("");
+  const [image, setImage] = useState<string>("");
+  const [retry, setRetry] = useState(0);
+  const [retryCount, setRetryCount] = useState(maxRetries);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [finalPrompt, setFinalPrompt] = useState("");
+
+  useEffect(() => {
+    const sleep = (ms: number) => {
+      return new Promise((resolve) => {
+        setTimeout(resolve, ms);
+      });
+    };
+
+    const runRetry = async () => {
+      if (retryCount === 0) {
+        console.log(
+          `Model still loading after ${maxRetries} retries. Try request again in 5 minutes.`
+        );
+        setRetryCount(maxRetries);
+        return;
+      }
+
+      console.log(`Trying again in ${retry} seconds.`);
+
+      await sleep(retry * 1000);
+
+      await generateAction();
+    };
+
+    if (retry === 0) {
+      return;
+    }
+
+    runRetry();
+  }, [retry]);
+
+  // Add generateAction
+  const generateAction = async () => {
+    console.log("Generating...");
+    if (isGenerating && retry === 0) return;
+
+    // Set loading has started
+    setIsGenerating(true);
+
+    if (retry > 0) {
+      setRetryCount((prevState) => {
+        if (prevState === 0) {
+          return 0;
+        } else {
+          return prevState - 1;
+        }
+      });
+
+      setRetry(0);
+    }
+
+    // Add the fetch request
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "image/jpeg",
+      },
+      body: JSON.stringify({ input: prompt }),
+    });
+
+    const data = await response.json();
+
+    // If model still loading, drop that retry time
+    if (response.status === 503) {
+      console.log("Model is loading still :(.");
+      return;
+    }
+
+    // If another error, drop error
+    if (!response.ok) {
+      console.log(`Error: ${data.error}`);
+      return;
+    }
+
+    setFinalPrompt(prompt);
+    setPrompt("");
+    setImage(data.image);
+    setIsGenerating(false);
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/pages/index.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
+    <div className="root">
+      <Head>
+        <title>AI Avatar Generator | buildspace</title>
+      </Head>
+      <div className="container">
+        <div className="header">
+          <div className="header-title">
+            <h1>Silly Avatar Generator</h1>
+          </div>
+          <div className="header-subtitle">
+            <h2>
+              Turn me into anything you want! Make sure you refer to me as
+              &quot;maneth&quot; in the prompt
+            </h2>
+          </div>
+          <div className="prompt-container">
+            <input
+              className="prompt-box"
+              value={prompt}
+              onChange={(e) => setPrompt(e.currentTarget.value)}
             />
-          </a>
+            <div
+              className={isGenerating ? "prompt-buttons" : "prompt-buttons up"}
+            >
+              <button
+                className={
+                  isGenerating ? "generate-button loading" : "generate-button"
+                }
+                onClick={generateAction}
+                disabled={isGenerating}
+              >
+                {/* Tweak to show a loading indicator */}
+                <div className="generate">
+                  {isGenerating ? (
+                    <span className="loader"></span>
+                  ) : (
+                    <p>Generate</p>
+                  )}
+                </div>
+              </button>
+            </div>
+          </div>
         </div>
+        {image && (
+          <div className="output-content">
+            <Image src={image} width={512} height={512} alt={prompt} />
+            <p className="mt-2">{finalPrompt}</p>
+          </div>
+        )}
       </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700/10 after:dark:from-sky-900 after:dark:via-[#0141ff]/40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:grid-cols-4 lg:text-left">
+      <div className="badge-container grow">
         <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
+          href="https://buildspace.so/builds/ai-avatar"
           target="_blank"
-          rel="noopener noreferrer"
+          rel="noreferrer"
         >
-          <h2 className={`${inter.className} mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p
-            className={`${inter.className} m-0 max-w-[30ch] text-sm opacity-50`}
-          >
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`${inter.className} mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p
-            className={`${inter.className} m-0 max-w-[30ch] text-sm opacity-50`}
-          >
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`${inter.className} mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p
-            className={`${inter.className} m-0 max-w-[30ch] text-sm opacity-50`}
-          >
-            Discover and deploy boilerplate example Next.js&nbsp;projects.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`${inter.className} mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p
-            className={`${inter.className} m-0 max-w-[30ch] text-sm opacity-50`}
-          >
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
+          <div className="badge">
+            <Image
+              src="/buildspace-logo.png"
+              alt="buildspace logo"
+              width={25}
+              height={25}
+            />
+            <p>build with buildspace</p>
+          </div>
         </a>
       </div>
-    </main>
-  )
-}
+    </div>
+  );
+};
+
+export default Home;
