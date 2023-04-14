@@ -1,16 +1,41 @@
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
 import Image from "next/image";
+import NavBar from "@/components/NavBar";
+import { copyToClipboard } from "@/utils";
+import { useRecoilState } from "recoil";
+import { generatedAtom } from "@/atoms/generatedAtom";
+import ClipboardIcon from "@/icons/ClipboardIcon";
+import DownloadIcon from "@/icons/DownloadIcon";
+import Card from "@/components/Card";
 
 const Home = () => {
   const maxRetries = 20;
 
   const [prompt, setPrompt] = useState<string>("");
-  const [image, setImage] = useState<string>("");
   const [retry, setRetry] = useState(0);
   const [retryCount, setRetryCount] = useState(maxRetries);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [finalPrompt, setFinalPrompt] = useState("");
+
+  const [generated, setGenerated] = useRecoilState(generatedAtom);
+
+  const [loading, setLoading] = useState(false);
+  const [countDown, setCountDown] = useState(30);
+
+  useEffect(() => {
+    // set up interval
+    const interval = setInterval(() => {
+      if (countDown > 0) {
+        setCountDown(countDown - 1);
+      } else {
+        setLoading(false);
+        setIsGenerating(false);
+        setCountDown(30);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [countDown, loading]);
 
   useEffect(() => {
     const sleep = (ms: number) => {
@@ -27,11 +52,8 @@ const Home = () => {
         setRetryCount(maxRetries);
         return;
       }
-
       console.log(`Trying again in ${retry} seconds.`);
-
       await sleep(retry * 1000);
-
       await generateAction();
     };
 
@@ -75,7 +97,9 @@ const Home = () => {
 
     // If model still loading, drop that retry time
     if (response.status === 503) {
-      console.log("Model is loading still :(.");
+      console.log("Model is loading still :(");
+      setLoading(true);
+      setCountDown(data.estimated_time);
       return;
     }
 
@@ -85,9 +109,11 @@ const Home = () => {
       return;
     }
 
-    setFinalPrompt(prompt);
+    setGenerated({
+      image: data.image,
+      prompt: prompt,
+    });
     setPrompt("");
-    setImage(data.image);
     setIsGenerating(false);
   };
 
@@ -96,10 +122,11 @@ const Home = () => {
       <Head>
         <title>AI Avatar Generator | buildspace</title>
       </Head>
+      <NavBar />
       <div className="container">
         <div className="header">
           <div className="header-title">
-            <h1>Silly Avatar Generator</h1>
+            <h1>Silly Maneth Generator</h1>
           </div>
           <div className="header-subtitle">
             <h2>
@@ -113,12 +140,17 @@ const Home = () => {
               value={prompt}
               onChange={(e) => setPrompt(e.currentTarget.value)}
             />
-            <div
-              className={isGenerating ? "prompt-buttons" : "prompt-buttons up"}
-            >
+            {loading && (
+              <p className="text-orange-300">
+                Loading model... Please try again in {countDown} seconds
+              </p>
+            )}
+            <div className="prompt-buttons">
               <button
                 className={
-                  isGenerating ? "generate-button loading" : "generate-button"
+                  isGenerating
+                    ? "generate-button loading"
+                    : "generate-button up"
                 }
                 onClick={generateAction}
                 disabled={isGenerating}
@@ -135,29 +167,11 @@ const Home = () => {
             </div>
           </div>
         </div>
-        {image && (
+        {generated.image && (
           <div className="output-content">
-            <Image src={image} width={512} height={512} alt={prompt} />
-            <p className="mt-2">{finalPrompt}</p>
+            <Card img={generated.image} prompt={generated.prompt} />
           </div>
         )}
-      </div>
-      <div className="badge-container grow">
-        <a
-          href="https://buildspace.so/builds/ai-avatar"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <div className="badge">
-            <Image
-              src="/buildspace-logo.png"
-              alt="buildspace logo"
-              width={25}
-              height={25}
-            />
-            <p>build with buildspace</p>
-          </div>
-        </a>
       </div>
     </div>
   );
